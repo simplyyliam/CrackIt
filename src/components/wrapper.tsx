@@ -6,7 +6,7 @@ export const Container: React.FC<HtmlHTMLAttributes<HTMLDivElement>> = ({
   ...props
 }) => {
   return (
-    <div className={`flex flex-col w-[50vw] h-[100vh] p-5 ${className}`} {...props}>
+    <div className={`flex flex-col w-[50vw] h-[100vh] p-5 gap-2.5 ${className}`} {...props}>
       {children}
     </div>
   );
