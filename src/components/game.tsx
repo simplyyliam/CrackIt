@@ -35,6 +35,17 @@ function Game() {
       });
     };
 
+    const handleOnScroll = (e: WheelEvent) => {
+      const step = e.deltaY > 0 ? 6 : -6;
+      rotationRef.value += step;
+      gsap.to(dial, {
+        rotate: rotationRef.value,
+        duration: 0.2,
+        ease: "power2.out",
+        transformOrigin: "center center",
+      });
+    };
+
     const handleMouseUp = (e: MouseEvent) => {
       if (!isDragging) return;
       isDragging = false;
@@ -46,16 +57,18 @@ function Game() {
     dial.addEventListener("mousedown", handleMouseDown);
     window.addEventListener("mousemove", handleMouseMove);
     window.addEventListener("mouseup", handleMouseUp);
+    dial.addEventListener('wheel', handleOnScroll)
 
     return () => {
       dial.removeEventListener("mousedown", handleMouseDown);
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
+      dial.removeEventListener('wheel', handleOnScroll)
     };
   }, []);
 
   return (
-    <Container className="">
+    <Container>
       <Box>
         <div className="flex flex-col items-center font-MONO gap-2.5">
           <h1 className="text-2xl font-medium">Verify that you are a human</h1>
