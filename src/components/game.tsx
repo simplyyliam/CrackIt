@@ -8,13 +8,17 @@ function Game() {
   const dialRef = useRef<HTMLDivElement>(null);
   const indicatorRef = useRef<HTMLSpanElement>(null);
   const rotationRef = useRef(0);
-  const [rotation, setRotation] = useState(0); 
+  const [rotation, setRotation] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [startX, setStartX] = useState(0);
+  const [targetCode, setTargetCode] = useState<number[]>([]);
+  const [solvedCode, setSolvedCode] = useState<number[]>([]); // user-guessed digits
 
   // current dial number (0–59)
-  const currentNumber = Math.round((((rotation % 360) + 360) % 360) / 6);
+  const angle = ((rotation % 360) + 360) % 360;
+  const currentNumber = (60 - Math.round(angle / 6)) % 60;
 
+  //Dial roation logic using mouse scroll, and dragging
   useEffect(() => {
     const dial = dialRef.current;
     if (!dial) return;
@@ -29,7 +33,7 @@ function Game() {
 
       const deltaX = e.clientX - startX;
       const sensitivity = 0.5;
-      const newRotation = rotationRef.current + deltaX * sensitivity;
+      const newRotation = rotationRef.current - deltaX * sensitivity;
 
       gsap.set(dial, {
         rotate: newRotation,
@@ -61,7 +65,7 @@ function Game() {
     };
 
     const handleOnScroll = (e: WheelEvent) => {
-      const step = e.deltaY > 0 ? 6 : -6;
+      const step = e.deltaY > 0 ? -6 : 6;
       rotationRef.current += step;
 
       gsap.to(dial, {
@@ -87,6 +91,26 @@ function Game() {
     };
   }, [isDragging, startX]);
 
+  useEffect(() => {
+    const digits = Array.from({ length: 4 }, () =>
+      Math.floor(Math.random() * 60)
+    );
+    setTargetCode(digits);
+    setSolvedCode(Array(4).fill(null));
+  }, []);
+
+  useEffect(() => {
+    if (targetCode.length === 0) return;
+
+    const nextIndex = solvedCode.findIndex((d) => d === null);
+    if (nextIndex === -1) return; // all solved
+
+    if (currentNumber === targetCode[nextIndex]) {
+      const newSolved = [...solvedCode];
+      newSolved[nextIndex] = currentNumber;
+      setSolvedCode(newSolved);
+    }
+  }, [currentNumber, targetCode, solvedCode]);
 
   return (
     <Container>
@@ -100,10 +124,10 @@ function Game() {
         </div>
 
         <div className="flex items-center justify-center gap-5">
-          <CodeInput></CodeInput>
-          <CodeInput></CodeInput>
-          <CodeInput></CodeInput>
-          <CodeInput></CodeInput>
+          <CodeInput>{solvedCode[0]}</CodeInput>
+          <CodeInput>{solvedCode[1]}</CodeInput>
+          <CodeInput>{solvedCode[2]}</CodeInput>
+          <CodeInput>{solvedCode[3]}</CodeInput>
         </div>
       </Box>
       <Box>
