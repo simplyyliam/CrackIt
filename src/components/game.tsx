@@ -6,26 +6,42 @@ import gsap from "gsap";
 
 function Game() {
   const dialRef = useRef<HTMLDivElement>(null);
-  const indicatorRef = useRef<HTMLSpanElement>(null);
   const rotationRef = useRef(0);
+
   const [rotation, setRotation] = useState(0);
-  const [isDragging, setIsDragging] = useState(false);
-  const [startX, setStartX] = useState(0);
   const [targetCode, setTargetCode] = useState<number[]>([]);
-  const [solvedCode, setSolvedCode] = useState<number[]>([]); // user-guessed digits
+  const [solvedCode, setSolvedCode] = useState<(number | null)[]>([]);
+  const [stepIndex, setStepIndex] = useState(0); // progress through sequence
+  const [lastDirection, setLastDirection] = useState<"cw" | "ccw" | null>(null);
+  const [hasWrapped, setHasWrapped] = useState(false); //State to see if we passed 0
 
   // current dial number (0–59)
   const angle = ((rotation % 360) + 360) % 360;
   const currentNumber = (60 - Math.round(angle / 6)) % 60;
 
-  //Dial roation logic using mouse scroll, and dragging
+  // Setup random combination once
+  useEffect(() => {
+    const digits = Array.from({ length: 4 }, () =>
+      Math.floor(Math.random() * 60)
+    );
+    setTargetCode(digits);
+    setSolvedCode(Array(4).fill(null));
+    setStepIndex(0);
+    setLastDirection(null);
+    setHasWrapped(false);
+  }, []);
+
+  // --- DIAL TURNING LOGIC ---
   useEffect(() => {
     const dial = dialRef.current;
     if (!dial) return;
 
+    let isDragging = false;
+    let startX = 0;
+
     const handleMouseDown = (e: MouseEvent) => {
-      setIsDragging(true);
-      setStartX(e.clientX);
+      isDragging = true;
+      startX = e.clientX;
     };
 
     const handleMouseMove = (e: MouseEvent) => {
@@ -35,20 +51,19 @@ function Game() {
       const sensitivity = 0.5;
       const newRotation = rotationRef.current - deltaX * sensitivity;
 
-      gsap.set(dial, {
-        rotate: newRotation,
-        transformOrigin: "center center",
-      });
+      const dir = deltaX > 0 ? "ccw" : "cw";
+      setLastDirection(dir as "cw" | "ccw");
 
+      gsap.set(dial, { rotate: newRotation, transformOrigin: "center center" });
       setRotation(newRotation);
     };
 
     const handleMouseUp = (e: MouseEvent) => {
       if (!isDragging) return;
-      setIsDragging(false);
+      isDragging = false;
 
       const deltaX = e.clientX - startX;
-      rotationRef.current += deltaX * 0.5;
+      rotationRef.current -= deltaX * 0.5;
 
       // snap to nearest 6°
       const snapped = Math.round(rotationRef.current / 6) * 6;
@@ -67,6 +82,9 @@ function Game() {
     const handleOnScroll = (e: WheelEvent) => {
       const step = e.deltaY > 0 ? -6 : 6;
       rotationRef.current += step;
+
+      const dir = step > 0 ? "cw" : "ccw";
+      setLastDirection(dir);
 
       gsap.to(dial, {
         rotate: rotationRef.current,
@@ -89,28 +107,63 @@ function Game() {
       window.removeEventListener("mouseup", handleMouseUp);
       dial.removeEventListener("wheel", handleOnScroll);
     };
-  }, [isDragging, startX]);
-
-  useEffect(() => {
-    const digits = Array.from({ length: 4 }, () =>
-      Math.floor(Math.random() * 60)
-    );
-    setTargetCode(digits);
-    setSolvedCode(Array(4).fill(null));
   }, []);
 
+  // --- LOCK LOGIC ---
   useEffect(() => {
     if (targetCode.length === 0) return;
+    if (stepIndex >= targetCode.length) return;
 
-    const nextIndex = solvedCode.findIndex((d) => d === null);
-    if (nextIndex === -1) return; // all solved
+    const target = targetCode[stepIndex];
 
-    if (currentNumber === targetCode[nextIndex]) {
-      const newSolved = [...solvedCode];
-      newSolved[nextIndex] = currentNumber;
-      setSolvedCode(newSolved);
+    // Step rules
+    if (stepIndex === 0) {
+      // Step 1: Must rotate clockwise to target
+      if (lastDirection === "cw" && currentNumber === target) {
+        const newSolved = [...solvedCode];
+        newSolved[stepIndex] = target;
+        setSolvedCode(newSolved);
+        setStepIndex(1);
+      }
+    } else if (stepIndex === 1) {
+      // Step 2: Must rotate CCW, pass previous once, land on target
+      if (lastDirection === "ccw") {
+        if (currentNumber === target && hasWrapped) {
+          const newSolved = [...solvedCode];
+          newSolved[stepIndex] = target;
+          setSolvedCode(newSolved);
+          setStepIndex(2);
+          setHasWrapped(false);
+        }
+        if (currentNumber === solvedCode[0]) {
+          setHasWrapped(true);
+        }
+      }
+    } else if (stepIndex === 2) {
+      // Step 3: Rotate CW directly to target
+      if (lastDirection === "cw" && currentNumber === target) {
+        const newSolved = [...solvedCode];
+        newSolved[stepIndex] = target;
+        setSolvedCode(newSolved);
+        setStepIndex(3);
+      }
+    } else if (stepIndex === 3) {
+      // Step 4: Rotate CCW to final target
+      if (lastDirection === "ccw" && currentNumber === target) {
+        const newSolved = [...solvedCode];
+        newSolved[stepIndex] = target;
+        setSolvedCode(newSolved);
+        setStepIndex(4); // solved!
+      }
     }
-  }, [currentNumber, targetCode, solvedCode]);
+  }, [
+    currentNumber,
+    targetCode,
+    stepIndex,
+    lastDirection,
+    hasWrapped,
+    solvedCode,
+  ]);
 
   return (
     <Container>
@@ -118,37 +171,18 @@ function Game() {
         <div className="flex flex-col items-center font-MONO gap-2.5">
           <h1 className="text-2xl font-medium">Verify that you are a human</h1>
           <p className="text-lg opacity-50 text-center">
-            Can you crack your way and enter the hidden 4-digit code before the
-            timer runs out..
+            Turn the dial like a real safe to crack the 4-digit code.
           </p>
         </div>
 
         <div className="flex items-center justify-center gap-5">
-          <CodeInput>{solvedCode[0]}</CodeInput>
-          <CodeInput>{solvedCode[1]}</CodeInput>
-          <CodeInput>{solvedCode[2]}</CodeInput>
-          <CodeInput>{solvedCode[3]}</CodeInput>
+          {solvedCode.map((digit, i) => (
+            <CodeInput key={i}>{digit}</CodeInput>
+          ))}
         </div>
       </Box>
+
       <Box>
-        <span ref={indicatorRef} className="rotate-180">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            width="24"
-            height="24"
-            color="#000000"
-            fill="none"
-          >
-            <path
-              d="M5.59347 9.22474C7.83881 5.62322 8.96148 3.82246 10.4326 3.28C11.445 2.90667 12.555 2.90667 13.5674 3.28C15.0385 3.82246 16.1612 5.62322 18.4065 9.22474C20.9338 13.2785 22.1975 15.3054 21.9749 16.9779C21.8222 18.125 21.2521 19.173 20.3762 19.9163C19.0993 21 16.7328 21 12 21C7.26716 21 4.90074 21 3.62378 19.9163C2.74792 19.173 2.17775 18.125 2.02509 16.9779C1.80252 15.3054 3.06617 13.2785 5.59347 9.22474Z"
-              stroke="#141B34"
-              stroke-width="1.5"
-              stroke-linejoin="round"
-            />
-          </svg>
-        </span>
-        {/* Dial Lock */}
         <div
           ref={dialRef}
           className="flex items-center justify-center rounded-full w-[349px] h-[349px] border-2 border-stone-100 font-MONO cursor-grab"
@@ -171,7 +205,6 @@ function Game() {
               </div>
             );
           })}
-
           {Array.from({ length: 60 }).map((_, i) => {
             const angle = (i / 60) * 360;
             const r = 160;
